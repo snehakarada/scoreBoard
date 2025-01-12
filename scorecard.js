@@ -1,7 +1,7 @@
 import { ballByBall } from "../data/match_1.js";
 
-const getScoreBoard = function () {
-  const data = {
+const getScoreBoard = () => {
+  return {
     teamName: '',
     totalRuns: 0,
     wickets: 0,
@@ -11,12 +11,10 @@ const getScoreBoard = function () {
     },
     bowlersData: {}
   };
-
-  return data;
 };
 
-const getBatterDetails = function () {
-  const details = {
+const getBatterDetails = () => {
+  return {
     name: '',
     dismissal: '',
     runs: 0,
@@ -24,33 +22,27 @@ const getBatterDetails = function () {
     fours: 0,
     sixes: 0
   };
-
-  return details;
 };
 
-const getBowlerDetails = function () {
-  const details = {
+const getBowlerDetails = () => {
+  return {
     name: '',
     overs: 0,
     balls: 0,
     runs: 0,
     wicket: 0
   };
-
-  return details;
 };
 
-const isFielderThere = (wicket) => {
-  return wicket[0].fielders ? 'c ' + wicket[0].fielders[0].name : '';
+const getFilderName = (wicket) => {
+  return wicket[0].fielders ? wicket[0].kind[0] + ' ' + wicket[0].fielders[0].name : '';
 };
 
 export const getDismissal = (wicket, bowler) => {
-  return wicket ? isFielderThere(wicket) + ' b ' + bowler : 'not out';
+  return wicket ? getFilderName(wicket) + ' b ' + bowler : 'not out';
 };
 
-export const isItFour = (runs, batsMan) => runs.batter === 4 && !runs.non_boundry ? batsMan.fours + 1 : batsMan.fours;
-
-export const isItSix = (runs, batsMan) => runs.batter === 6 && !runs.non_boundry ? batsMan.sixes + 1 : batsMan.sixes;
+export const isItBoundry = (runs, score) => runs.batter === score && !runs.non_boundry;
 
 export const isItValidBall = (extras) => !(extras && (Object.keys(extras).includes('wides') || Object.keys(extras).includes('no balls')));
 
@@ -59,8 +51,8 @@ export const batterStats = function (batsMan, data, wicket, batter, bowler, runs
   batsMan.dismissal = getDismissal(wicket, bowler);
   batsMan.runs = batsMan.runs + runs.batter;
   batsMan.balls = isItValidBall(extras) ? batsMan.balls + 1 : batsMan.balls;
-  batsMan.fours = isItFour(runs, batsMan);
-  batsMan.sixes = isItSix(runs, batsMan);
+  batsMan.fours = isItBoundry(runs, 4) ? batsMan.fours + 1 : batsMan.fours;
+  batsMan.sixes = isItBoundry(runs, 6) ? batsMan.sixes + 1 : batsMan.sixes;
   data.battersData[batter] = batsMan;
 
   return data;
@@ -75,12 +67,7 @@ const updatingBatterDetails = function (wicket, batter, bowler, runs, data, extr
 };
 
 export const countWickets = function (wicket, data) {
-  if (!wicket) {
-    return data;
-  }
-
-  data.wickets = data.wickets + 1;
-  return data;
+  return wicket ? data.wickets + 1 : data.wickets;
 };
 
 const mergeWith = (o1, o2, f) => {
@@ -113,15 +100,14 @@ const updatingBowlerDetails = (bowler, wicket, runs, extras, data) => {
     data.bowlersData[bowler] = getBowlerDetails();
   }
 
-  data = bowlerStats(data.bowlersData[bowler], wicket, bowler, runs, extras, data);
-  return data;
+  return bowlerStats(data.bowlersData[bowler], wicket, bowler, runs, extras, data);
 };
 
-const updatingScoreBoard = function (ballsData, data) {
+const updatingScoreBoard = function (data, ballsData) {
   ballsData.forEach(({ batter, bowler, runs, extras, wickets }) => {
     data.totalRuns = data.totalRuns + runs.total;
     data.extras = mergeWith(extras, data.extras, add);
-    data = countWickets(wickets, data);
+    data.wickets = countWickets(wickets, data);
     data = updatingBatterDetails(wickets, batter, bowler, runs, data, extras);
     data = updatingBowlerDetails(bowler, wickets, runs, extras, data);
   });
@@ -129,23 +115,56 @@ const updatingScoreBoard = function (ballsData, data) {
   return data;
 };
 
-const concatingResults = function (team) {
-  const intro = 'Team,Total,Wickets\n' + team.teamName + team.totalRuns + team.wicket;
-  const batters = 
+const concatBattersDetails = (battersData) => {
+  const batters = [];
+  const battersDetails = Object.values(battersData);
 
+  for (let index = 0; index < battersDetails.length; index++) {
+    batters.push([[battersDetails[index].name, battersDetails[index].dismissal, battersDetails[index].runs, battersDetails[index].balls, battersDetails[index].fours, battersDetails[index].sixes].join(',')]);
+  }
+
+  batters.unshift(['Batter,Dismissal,Runs,Balls,4s,6s']);
+  return batters.join('\n');
+};
+
+const concatBowlersDetails = (bowlersData) => {
+  const bowlers = [];
+  const bowlersDetails = Object.values(bowlersData);
+
+  for (let index = 0; index < bowlersDetails.length; index++) {
+    bowlers.push([[bowlersDetails[index].name, bowlersDetails[index].overs, bowlersDetails[index].runs, bowlersDetails[index].wicket].join(',')]);
+  }
+
+  bowlers.unshift(['Bowler,O,R,W']);
+  return bowlers.join('\n');
+};
+
+const concatingResults = function (team) {
+  const intro = 'Team,Total,Wickets\n' + [team.teamName, team.totalRuns, team.wickets].join(',');
+  const batters = concatBattersDetails(team.battersData);
+  const bowlers = concatBowlersDetails(team.bowlersData);
+  const extras = 'Noballs,Wides,Legbyes,Byes\n' + [team.extras.noballs, team.extras.wides, team.extras.legbyes, team.extras.byes].join(',');
+
+  return [intro, batters, extras, bowlers].join('\n---\n');
+};
+
+const getResult = (scorecard, ballsData) => {
+  updatingScoreBoard(scorecard, ballsData);
+  return concatingResults(scorecard);
 };
 
 export const generateScoreCard = ballByBall => {
-  const result = '';
   const ballsData = ballByBall.innings.map(({ overs }) => overs.flatMap(({ deliveries }) => deliveries));
   const teamNames = ballByBall.innings.map(({ team }) => team);
-  const scorecard = getScoreBoard();
 
-  updatingScoreBoard(ballsData[0], scorecard);
-  scorecard.teamName = teamNames[0];
-  result += concatingResults(team1);
-  console.log('data', scorecard);
+  const scorecard1 = getScoreBoard();
+  scorecard1.teamName = teamNames[0];
+
+  const scorecard2 = getScoreBoard();
+  scorecard2.teamName = teamNames[1];
+
+  return [getResult(scorecard1, ballsData[0]), getResult(scorecard2, ballsData[1])].join('\n---\n');
+
 };
 
-generateScoreCard(ballByBall);
-
+console.log(generateScoreCard(ballByBall));
